@@ -33,6 +33,7 @@ export interface PaymentCheck {
 }
 
 const REFERENCE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const DUPLICATE_WINDOW_MS = 30 * 60 * 1000;
 
 const newReference = (): string => {
   const bytes = crypto.getRandomValues(new Uint8Array(6));
@@ -63,13 +64,43 @@ const loadOrder = async (reference: string): Promise<Result<Order>> => {
   return ok(fromRow(row));
 };
 
+// Chord's model can lose sight of an earlier create_order result and call it
+// again for the same order, so an identical unpaid order is returned instead.
+const findRecentDuplicate = async (
+  priced: PricedOrder
+): Promise<Order | null> => {
+  const since = new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString();
+
+  const row = await env.DB.prepare(
+    `SELECT * FROM orders
+     WHERE status = 'awaiting_payment' AND lower(customer_name) = lower(?)
+       AND delivery_area = ? AND lines_json = ? AND created_at > ?
+     ORDER BY created_at DESC LIMIT 1`
+  )
+    .bind(
+      priced.customer_name,
+      priced.delivery_area,
+      JSON.stringify(priced.lines),
+      since
+    )
+    .first<OrderRow>();
+
+  return row ? fromRow(row) : null;
+};
+
 export const createOrder = async (
   request: OrderRequest
-): Promise<Result<Order>> => {
+): Promise<Result<Order & { reused_existing_order: boolean }>> => {
   const priced = priceOrder(request);
 
   if (!priced.ok) {
     return priced;
+  }
+
+  const duplicate = await findRecentDuplicate(priced.value);
+
+  if (duplicate) {
+    return ok({ ...duplicate, reused_existing_order: true });
   }
 
   const order: Order = {
@@ -98,7 +129,7 @@ export const createOrder = async (
     )
     .run();
 
-  return ok(order);
+  return ok({ ...order, reused_existing_order: false });
 };
 
 export const createPaymentLink = async (

@@ -57,6 +57,8 @@ if (process.argv[2] === "status") {
   process.exit(0);
 }
 
+const customerName = `Smoke Test ${Date.now().toString(36)}`;
+
 const listTools = (headers: Record<string, string>) =>
   fetch(url, {
     body: JSON.stringify({ id: 1, jsonrpc: "2.0", method: "tools/list" }),
@@ -99,7 +101,7 @@ assert.deepEqual(tools.map((t) => t.name).toSorted(), [
 console.log("✓ tools/list:", tools.map((t) => t.name).join(", "));
 
 const unknown = await call("create_order", {
-  customer_name: "Smoke Test",
+  customer_name: customerName,
   delivery_area: "Wuse",
   items: [{ item_id: "chapman", quantity: 1 }],
 });
@@ -111,7 +113,7 @@ assert.equal(unknown.payload.error.code, "UNKNOWN_ITEM");
 console.log("✓ unknown item ->", unknown.payload.error.code);
 
 const badArea = await call("create_order", {
-  customer_name: "Smoke Test",
+  customer_name: customerName,
   delivery_area: "Lekki",
   items: [{ item_id: "zobo-50cl", quantity: 1 }],
 });
@@ -121,7 +123,7 @@ assert.equal(badArea.payload.error.code, "UNKNOWN_DELIVERY_AREA");
 console.log("✓ unknown area ->", badArea.payload.error.code);
 
 const order = await call("create_order", {
-  customer_name: "Smoke Test",
+  customer_name: customerName,
   delivery_area: "Jabi",
   items: [
     { item_id: "zobo-50cl", quantity: 2 },
@@ -136,6 +138,25 @@ assert.equal(order.payload.total_ngn, 2 * 1800 + 4500 + 1500);
 const reference: string = order.payload.reference;
 
 console.log("✓ create_order ->", reference, `₦${order.payload.total_ngn}`);
+
+const repeat = await call("create_order", {
+  customer_name: customerName.toLowerCase(),
+  delivery_area: "jabi",
+  items: [
+    { item_id: "small-chops-pack", quantity: 1 },
+    { item_id: "zobo-50cl", quantity: 2 },
+  ],
+});
+
+assert.equal(
+  repeat.payload.reference,
+  reference,
+  "same order reuses reference"
+);
+
+assert.equal(repeat.payload.reused_existing_order, true);
+
+console.log("✓ repeated create_order reuses", repeat.payload.reference);
 
 const early = await call("check_payment_status", {
   order_reference: reference,

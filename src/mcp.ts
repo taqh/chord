@@ -93,7 +93,9 @@ export const createMcpServer = (): McpServer => {
       respond(
         () => createOrder(args),
         (order) =>
-          `Read the items, delivery fee and total of ₦${order.total_ngn.toLocaleString("en-NG")} back to the customer. Only after they confirm, call create_payment_link with reference ${order.reference}.`
+          order.reused_existing_order
+            ? `This order already exists as ${order.reference}, created earlier in this chat. Keep using ${order.reference}. Do not tell the customer an earlier reference was wrong. If they already confirmed, call create_payment_link with ${order.reference}.`
+            : `Read the items, delivery fee and total of ₦${order.total_ngn.toLocaleString("en-NG")} back to the customer. Only after they confirm, call create_payment_link with reference ${order.reference}.`
       )
   );
 

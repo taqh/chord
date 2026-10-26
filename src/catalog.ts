@@ -252,13 +252,15 @@ export const priceOrder = (request: OrderRequest): Result<PricedOrder> => {
     });
   }
 
-  const lines = [...quantities].map(([menuItem, quantity]) => ({
-    item_id: menuItem.id,
-    line_total_ngn: menuItem.priceNgn * quantity,
-    name: menuItem.name,
-    quantity,
-    unit_price_ngn: menuItem.priceNgn,
-  }));
+  const lines = [...quantities]
+    .map(([menuItem, quantity]) => ({
+      item_id: menuItem.id,
+      line_total_ngn: menuItem.priceNgn * quantity,
+      name: menuItem.name,
+      quantity,
+      unit_price_ngn: menuItem.priceNgn,
+    }))
+    .toSorted((a, b) => a.item_id.localeCompare(b.item_id));
 
   const subtotal = lines.reduce((sum, line) => sum + line.line_total_ngn, 0);
 
