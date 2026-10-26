@@ -134,7 +134,8 @@ The Worker is published at `https://chord.taqib.dev`, a custom domain declared i
    Zipping the `skill` folder itself prefixes every path with `skill/`, and then `references/menu.md` no longer matches. Set autonomy to **Act independently** so the teammate replies to customers itself.
 
 4. **Limit the teammate's tools.** Restrict the teammate to this server with `PUT /v1/teammates/{id}` and the body `{"set_mcp_server_ids": ["mcp-…"]}`.
-5. **Test.** Use the teammate's in-app chat. Ask for "2 zobo 50cl and 1 small chops pack to Jabi", confirm, pay the link with Paystack's **Success** test option, then say you've paid.
+5. **Set the escalation email.** Open the teammate's settings (gear icon) → Behavior → Escalation → "Notify this inbox on escalation", then save. With the API, use `PUT /v1/teammates/{id}/escalation-notifications` with `{"notify_to": "owner@example.com", "workspace_id": "ws-…"}`.
+6. **Test.** Use the teammate's in-app chat. Ask for "2 zobo 50cl and 1 small chops pack to Jabi", confirm, pay the link with Paystack's **Success** test option, then say you've paid.
 
 ## Change the menu
 
