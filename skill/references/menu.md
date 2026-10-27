@@ -3,7 +3,7 @@
 Generated from `src/catalog.ts` by `pnpm menu:gen`. Do not edit by hand.
 These prices are placeholders until the owner confirms the real menu.
 
-Pass the `Item id` column as `item_id` to `create_order`. Quote prices exactly as listed, in naira.
+Pass the `Item id` column as `item_id` to `quote_order` and `create_order`. Quote prices exactly as listed, in naira.
 
 ## Drinks
 

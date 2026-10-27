@@ -64,17 +64,16 @@ const loadOrder = async (reference: string): Promise<Result<Order>> => {
   return ok(fromRow(row));
 };
 
-// Chord's model can lose sight of an earlier create_order result and call it
-// again for the same order, so an identical unpaid order is returned instead.
-const findRecentDuplicate = async (
-  priced: PricedOrder
-): Promise<Order | null> => {
+// Chord does not keep earlier tool results in the model's context, so the model
+// can call create_order again for an order it already placed. The most recent
+// identical order (same name, area and items) in the window is returned instead.
+const findRecentMatch = async (priced: PricedOrder): Promise<Order | null> => {
   const since = new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString();
 
   const row = await env.DB.prepare(
     `SELECT * FROM orders
-     WHERE status = 'awaiting_payment' AND lower(customer_name) = lower(?)
-       AND delivery_area = ? AND lines_json = ? AND created_at > ?
+     WHERE lower(customer_name) = lower(?) AND delivery_area = ?
+       AND lines_json = ? AND created_at > ?
      ORDER BY created_at DESC LIMIT 1`
   )
     .bind(
@@ -88,23 +87,9 @@ const findRecentDuplicate = async (
   return row ? fromRow(row) : null;
 };
 
-export const createOrder = async (
-  request: OrderRequest
-): Promise<Result<Order & { reused_existing_order: boolean }>> => {
-  const priced = priceOrder(request);
-
-  if (!priced.ok) {
-    return priced;
-  }
-
-  const duplicate = await findRecentDuplicate(priced.value);
-
-  if (duplicate) {
-    return ok({ ...duplicate, reused_existing_order: true });
-  }
-
+const insertOrder = async (priced: PricedOrder): Promise<Order> => {
   const order: Order = {
-    ...priced.value,
+    ...priced,
     created_at: new Date().toISOString(),
     paid_at: null,
     payment_url: null,
@@ -129,30 +114,13 @@ export const createOrder = async (
     )
     .run();
 
-  return ok({ ...order, reused_existing_order: false });
+  return order;
 };
 
-export const createPaymentLink = async (
-  reference: string,
+const ensurePaymentLink = async (
+  order: Order,
   customerEmail?: string
 ): Promise<Result<Order & { payment_url: string }>> => {
-  const loaded = await loadOrder(reference);
-
-  if (!loaded.ok) {
-    return loaded;
-  }
-
-  const order = loaded.value;
-
-  if (order.status === "paid") {
-    return fail({
-      code: "ORDER_ALREADY_PAID",
-      handoff_to_owner: false,
-      message: `Order ${order.reference} is already paid. No new link is needed.`,
-      retryable: false,
-    });
-  }
-
   // Paystack rejects a reused reference, so an order keeps the link it was first given.
   if (order.payment_url) {
     return ok({ ...order, payment_url: order.payment_url });
@@ -178,11 +146,67 @@ export const createPaymentLink = async (
   }
 
   const paymentUrl = initialized.value.authorization_url;
+
   await env.DB.prepare("UPDATE orders SET payment_url = ? WHERE reference = ?")
     .bind(paymentUrl, order.reference)
     .run();
 
   return ok({ ...order, payment_url: paymentUrl });
+};
+
+export type PlacedOrder = Order & { reused_existing_order: boolean };
+
+export const quoteOrder = (
+  request: Omit<OrderRequest, "customer_name">
+): Promise<Result<PricedOrder>> =>
+  Promise.resolve(priceOrder({ ...request, customer_name: "" }));
+
+export const createOrder = async (
+  request: OrderRequest,
+  customerEmail?: string
+): Promise<Result<PlacedOrder>> => {
+  const priced = priceOrder(request);
+
+  if (!priced.ok) {
+    return priced;
+  }
+
+  const existing = await findRecentMatch(priced.value);
+
+  if (existing?.status === "paid") {
+    return ok({ ...existing, reused_existing_order: true });
+  }
+
+  const order = existing ?? (await insertOrder(priced.value));
+  const linked = await ensurePaymentLink(order, customerEmail);
+
+  if (!linked.ok) {
+    return linked;
+  }
+
+  return ok({ ...linked.value, reused_existing_order: existing !== null });
+};
+
+export const createPaymentLink = async (
+  reference: string,
+  customerEmail?: string
+): Promise<Result<Order & { payment_url: string }>> => {
+  const loaded = await loadOrder(reference);
+
+  if (!loaded.ok) {
+    return loaded;
+  }
+
+  if (loaded.value.status === "paid") {
+    return fail({
+      code: "ORDER_ALREADY_PAID",
+      handoff_to_owner: false,
+      message: `Order ${loaded.value.reference} is already paid. No new link is needed.`,
+      retryable: false,
+    });
+  }
+
+  return await ensurePaymentLink(loaded.value, customerEmail);
 };
 
 export const checkPaymentStatus = async (
@@ -221,7 +245,7 @@ export const checkPaymentStatus = async (
     return fail({
       code: "PAYMENT_LINK_NOT_CREATED",
       handoff_to_owner: false,
-      message: `Order ${order.reference} has no payment link yet. Call create_payment_link first.`,
+      message: `Order ${order.reference} has no payment link yet. Call create_payment_link with ${order.reference}.`,
       retryable: false,
     });
   }
