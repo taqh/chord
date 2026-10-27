@@ -31,9 +31,14 @@ export const renderMenu = (): string => {
     ...sections.flatMap((s) => [s, ""]),
     "## Delivery areas (Abuja)",
     "",
-    "| Area | Delivery fee |",
-    "| --- | --- |",
-    ...DELIVERY_AREAS.map((a) => `| ${a.name} | ${naira(a.feeNgn)} |`),
+    'Pass the `Area` name as `delivery_area`. A street, estate or landmark inside an area counts as that area: for "Softlife Apartments, Jahi" pass `Jahi`. If you\'re not sure which area a place is in, ask the customer for the area.',
+    "",
+    "| Area | Also called | Delivery fee |",
+    "| --- | --- | --- |",
+    ...DELIVERY_AREAS.map(
+      (a) =>
+        `| ${a.name} | ${(a.alsoCalled ?? []).join(", ")} | ${naira(a.feeNgn)} |`
+    ),
     "",
     "Any other area: tell the customer we don't deliver there yet and offer to pass them to the owner.",
     "",

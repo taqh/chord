@@ -12,6 +12,8 @@ export interface MenuItem {
 export interface DeliveryArea {
   name: string;
   feeNgn: number;
+  // Other names customers use for the same place, such as "Area 11" for Garki.
+  alsoCalled?: readonly string[];
 }
 
 export const MENU: readonly MenuItem[] = [
@@ -74,15 +76,63 @@ export const MENU: readonly MenuItem[] = [
 ];
 
 export const DELIVERY_AREAS: readonly DeliveryArea[] = [
-  { feeNgn: 1500, name: "Wuse" },
-  { feeNgn: 1500, name: "Garki" },
+  {
+    alsoCalled: [
+      "Wuse 2",
+      "Wuse II",
+      "Zone 1",
+      "Zone 2",
+      "Zone 3",
+      "Zone 4",
+      "Zone 5",
+      "Zone 6",
+      "Zone 7",
+    ],
+    feeNgn: 1500,
+    name: "Wuse",
+  },
+  {
+    alsoCalled: [
+      "Garki 2",
+      "Garki II",
+      "Area 1",
+      "Area 2",
+      "Area 3",
+      "Area 7",
+      "Area 8",
+      "Area 10",
+      "Area 11",
+    ],
+    feeNgn: 1500,
+    name: "Garki",
+  },
+  {
+    alsoCalled: ["CBD", "Central Business District"],
+    feeNgn: 1500,
+    name: "Central Area",
+  },
   { feeNgn: 1500, name: "Maitama" },
   { feeNgn: 1500, name: "Jabi" },
   { feeNgn: 1500, name: "Utako" },
+  { feeNgn: 1500, name: "Wuye" },
+  { feeNgn: 1500, name: "Mabushi" },
+  { feeNgn: 2000, name: "Jahi" },
+  { feeNgn: 2000, name: "Kado" },
+  { feeNgn: 2000, name: "Katampe" },
+  { feeNgn: 2000, name: "Life Camp" },
   { feeNgn: 2000, name: "Asokoro" },
+  { feeNgn: 2000, name: "Guzape" },
+  { feeNgn: 2000, name: "Durumi" },
+  { feeNgn: 2000, name: "Gudu" },
   { feeNgn: 2500, name: "Gwarinpa" },
+  { feeNgn: 2500, name: "Apo" },
+  { feeNgn: 2500, name: "Lokogoma" },
+  { feeNgn: 2500, name: "Galadimawa" },
+  { feeNgn: 3000, name: "Karsana" },
+  { feeNgn: 3000, name: "Dawaki" },
   { feeNgn: 3000, name: "Lugbe" },
   { feeNgn: 3000, name: "Kubwa" },
+  { feeNgn: 3000, name: "Karu" },
 ];
 
 export const MAX_QUANTITY_PER_ITEM = 30;
@@ -160,8 +210,13 @@ const itemsByKey = new Map<string, MenuItem>(
   ])
 );
 
-const areasByKey = new Map(
-  DELIVERY_AREAS.map((area) => [normalize(area.name), area])
+const areasByKey = new Map<string, DeliveryArea>(
+  DELIVERY_AREAS.flatMap((area) =>
+    [area.name, ...(area.alsoCalled ?? [])].map((name) => [
+      normalize(name),
+      area,
+    ])
+  )
 );
 
 export const priceOrder = (request: OrderRequest): Result<PricedOrder> => {

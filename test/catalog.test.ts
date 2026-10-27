@@ -116,6 +116,25 @@ test("rejects a delivery area outside the list", () => {
   assert.deepEqual(!result.ok && result.error.code, "UNKNOWN_DELIVERY_AREA");
 });
 
+const areaFor = (delivery_area: string) => {
+  const result = priceOrder({
+    customer_name: "T",
+    delivery_area,
+    items: [{ item_id: "zobo-35cl", quantity: 1 }],
+  });
+
+  return (
+    result.ok && [result.value.delivery_area, result.value.delivery_fee_ngn]
+  );
+};
+
+test("maps other names for a place to its delivery area", () => {
+  assert.deepEqual(areaFor("Area 11"), ["Garki", 1500]);
+  assert.deepEqual(areaFor("garki 2"), ["Garki", 1500]);
+  assert.deepEqual(areaFor("Zone 5"), ["Wuse", 1500]);
+  assert.deepEqual(areaFor("Jahi"), ["Jahi", 2000]);
+});
+
 test("skill menu.md matches the catalog", () => {
   assert.equal(
     readFileSync(
