@@ -51,12 +51,43 @@ Afterwards we ran three fresh simulator chats, with 12 customer messages in tota
 - **Keep unsent drafts out.** Don't keep draft text the customer never received in the model's context.
 - **Show arguments and results.** Show tool arguments and results in the thread turns API and the "How I did this" trace for channel conversations. `tools_used` only gives the tool name and `ok`, which made this slow to diagnose.
 
-## 2. The simulator never showed the handoff message
+## 2. Handoffs reach neither the customer nor the owner
 
-- **What happened.** In the WhatsApp Simulator (2026-10-26 18:58), a customer asked for 40 bottles for an office party and asked to speak to the owner. The teammate correctly called `handover_to_human` with the reason "Customer Tunde Test wants 40 bottles of zobo 50cl for an office party in Wuse on Friday (bulk/event order) and asked to speak to the owner. No order created yet." Chord moved the thread to `human_active` and stored a reply, "One moment — connecting you with a teammate." The simulator only ever showed "No reply yet. If someone has taken over in Chord, their reply will appear here."
-- **How we found it.** `GET /v1/threads/{id}/turns` shows the outbound turn with `metadata.system_event: "handover_acknowledgement"`. The simulator never displayed it.
-- **Fix.** None possible on our side. The handoff itself works and appears under Escalated in Chord. The customer just never sees the acknowledgement.
-- **What we'd change in Chord.** Deliver handover acknowledgements to external-chat apps, or document that partner apps must fetch system turns themselves.
+When the teammate hands a chat to a human, the customer sees nothing and the owner isn't told. The owner of The Juice Trybe hit this in her first test. Her words: "it ignored her".
+
+### What happened
+
+| When | Where | What happened |
+| --- | --- | --- |
+| 2026-10-26 18:58 | Simulator | A customer asked for 40 bottles for an office party and asked for the owner. The teammate called `handover_to_human` with the reason "Customer Tunde Test wants 40 bottles of zobo 50cl for an office party in Wuse on Friday (bulk/event order) and asked to speak to the owner. No order created yet." The simulator only ever showed "No reply yet. If someone has taken over in Chord, their reply will appear here." No escalation email was set up at that point. |
+| 2026-10-27 17:08 | Simulator, the business owner | She asked for delivery to an area we didn't cover yet, then wrote "I still want delivery". The teammate handed off with the reason "Customer Huraira wants drinks delivered to Softlife Apartments, Jahi, which is outside the listed delivery areas…". The simulator showed her no reply, so she wrote "Hello" 17 seconds later. No escalation email arrived at the inbox set the day before, so nobody knew the chat was waiting. |
+| 2026-10-27 19:58 | Simulator, our repeat test | To confirm, we asked the teammate "can I speak to the owner please? I want to ask about a birthday party order for Saturday". It handed off within 2 seconds with a correct reason. The simulator again showed only "No reply yet", and Chord again stored only the system acknowledgement. Again, no escalation email arrived. |
+
+![Chord's view of the owner's chat: the AI is paused and the handoff message only appears here, not in the simulator](docs/field-notes/handover-owner-test.png)
+
+The repeat test from both sides. On the left, the customer's screen after asking for the owner shows only "No reply yet". On the right, Chord shows the same chat paused, with the acknowledgement the customer never received.
+
+<p>
+  <img src="docs/field-notes/handover-simulator-no-reply.png" alt="Simulator: after asking for the owner, the customer sees only 'No reply yet'" width="56%">
+  <img src="docs/field-notes/handover-chord-paused.png" alt="Chord: the same chat is paused and shows 'One moment — connecting you with a teammate.'" width="40%">
+</p>
+
+### How we found it
+
+- **Thread turns.** In `GET /v1/threads/{id}/turns`, the only outbound turn after "I still want delivery" is a system turn: `"sender": {"kind": "system"}`, `metadata.system_event: "handover_acknowledgement"`, text "One moment — connecting you with a teammate.", `delivery_status: "sent"`. The simulator never displayed it.
+- **No message from the teammate.** The skill tells the teammate to tell the customer it is passing them to the owner, then call `handover_to_human`. None of the three handoffs contains that message. Either the model's reply is dropped when it hands off, or it is never generated. We can't tell which, because Chord doesn't show the model's output.
+- **Email setting.** `GET /v1/teammates/{id}/escalation-notifications` returns `{"notify_to": "hi@taqib.dev"}`. The settings page says "Every escalation also sends an email to this support inbox." Both of the last two threads show `control_state: "human_active"` with `last_handoff_at` set, so Chord counted them as escalations, but no email arrived for either, in the inbox or in spam. There is no API or screen to check whether Chord tried to send it.
+
+### Fix
+
+None on our side. The handoff works inside Chord: the thread moves to Escalated, the AI pauses, and the owner can reply from Chord. The owner only finds it by opening Chord, though, and the customer is left waiting with no reply.
+
+### What we'd change in Chord
+
+- **Show handoffs to the customer.** Deliver the handover acknowledgement to external-chat apps like the simulator, and keep the teammate's own message when it calls `handover_to_human`.
+- **Send the escalation email**, and show a delivery log for it (sent, bounced, last sent at) next to the setting, with a "send test email" button.
+- **Make the setting findable.** The inbox field sits in the right-hand Settings panel, under a collapsed Behavior section. The gear icon next to it opens a different Settings window. Until we found it, `notify_to` was `null`, so handoffs would have reached nobody. Warn when a teammate can hand off but has no inbox set.
+- **Let builders test handoffs in the in-app chat.** `handover_to_human` is only offered "on thread-bound turns", so we couldn't test any of this before connecting the simulator.
 
 ## 3. Zipping the skill folder broke the reference path
 
@@ -65,10 +96,9 @@ Afterwards we ran three fresh simulator chats, with 12 customer messages in tota
 - **Fix.** We zipped from inside the folder instead (`cd skill && zip -r ../skill.zip SKILL.md references`).
 - **What we'd change in Chord.** Strip a single shared top-level folder from ZIP uploads, or warn when a file path named in the instructions isn't in the package.
 
-## 4. Smaller issues
+## 4. "New conversation" in the in-app chat kept the old history
 
-- **The skill was named "Untitled skill".** Creating the teammate from files ignored `name: juicetrybe-orders` in the frontmatter, both in the UI and in `GET /v1/teammates/{id}/skills`. We renamed it through the Skills API. **Change:** default to the frontmatter `name`.
-- **The escalation email setting was hard to find.** It sits under teammate settings (gear icon), in the collapsed Behavior section, under Escalation. `GET /v1/teammates/{id}/escalation-notifications` returned `"notify_to": null`, so handoffs would have reached nobody. **Change:** warn when a teammate can hand off but has no notification inbox.
-- **"New conversation" in the in-app chat kept the old history.** A new conversation mentioned "your Jabi order" and "your Lekki office request" from earlier tests. `GET /v1/threads` shows one `direct_line` thread per operator holding every in-app message, and the teammate's learned memory was empty. **Change:** make "New conversation" start a fresh thread, or label it as a continuation.
-- **The handoff tool isn't offered in the in-app chat.** `handover_to_human` is only offered "on thread-bound turns", so escalation can't be tested before connecting a channel or the simulator. **Change:** offer a simulated takeover in the in-app chat.
-- **The MCP guide doesn't name the Accept header Chord sends.** The official MCP SDK transport returns `406 Not Acceptable: Client must accept both application/json and text/event-stream` unless both are present. We logged real requests: Chord sends `Accept: application/json, text/event-stream` with `User-Agent: Java-http-client/23.0.2`, so either transport works. **Change:** list the exact request headers in the MCP guide.
+- **What happened.** A new conversation in Chord's in-app chat greeted us with "your Jabi order" and "your Lekki office request" from earlier tests.
+- **How we found it.** `GET /v1/threads` shows one `direct_line` thread per operator, holding every in-app message. The teammate's learned memory was empty, so memory wasn't the cause.
+- **Fix.** We tested with the WhatsApp Simulator instead, which gives each browser its own thread.
+- **What we'd change in Chord.** Make "New conversation" start a fresh thread, or label it as a continuation.
