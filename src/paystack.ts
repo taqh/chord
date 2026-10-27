@@ -195,7 +195,29 @@ export const initializeTransaction = async (
       callback_url: input.callbackUrl,
       currency: "NGN",
       email: input.email,
-      metadata: input.metadata,
+      metadata: {
+        ...input.metadata,
+        // Paystack shows custom_fields on the receipt and the dashboard; other metadata stays hidden.
+        custom_fields: [
+          {
+            display_name: "Items",
+            value: input.metadata.lines
+              .map((line) => `${line.quantity} x ${line.name}`)
+              .join(", "),
+            variable_name: "items",
+          },
+          {
+            display_name: "Customer",
+            value: input.metadata.customer_name,
+            variable_name: "customer_name",
+          },
+          {
+            display_name: "Delivery area",
+            value: input.metadata.delivery_area,
+            variable_name: "delivery_area",
+          },
+        ],
+      },
       reference: input.reference,
     }),
     method: "POST",
