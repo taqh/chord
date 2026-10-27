@@ -137,12 +137,18 @@ The Worker is published at `https://chord.taqib.dev`, a custom domain declared i
    Zipping the `skill` folder itself prefixes every path with `skill/`, and then `references/menu.md` no longer matches. Set autonomy to **Act independently** so the teammate replies to customers itself.
 
 4. **Limit the teammate's tools.** Restrict the teammate to this server with `PUT /v1/teammates/{id}` and the body `{"set_mcp_server_ids": ["mcp-…"]}`.
-5. **Set the escalation email.** Open the teammate's settings (gear icon) → Behavior → Escalation → "Notify this inbox on escalation", then save. With the API, use `PUT /v1/teammates/{id}/escalation-notifications` with `{"notify_to": "owner@example.com", "workspace_id": "ws-…"}`.
+5. **Set the escalation email.** On the teammate's page, open the panel menu at the top of the chat (the sidebar icon with a small arrow) and choose **Settings**. On the **Tools and connections** tab, expand **Behavior**, enter the inbox under **Escalation** → "Notify this inbox on escalation", and click **Save**. The gear icon opens a different Settings window that doesn't have this field. With the API, use `PUT /v1/teammates/{id}/escalation-notifications` with `{"notify_to": "owner@example.com", "workspace_id": "ws-…"}`.
 6. **Test.** Open the WhatsApp Simulator chat link (chat.tsglabs.dev). Each browser gets its own conversation. Ask for "2 zobo 50cl and 1 small chops pack to Jabi", confirm, pay the link with Paystack's **Success** test option, then say you've paid. The in-app chat in Chord works too, but it keeps one shared history for you.
 
 ## Change the menu
 
 Edit `MENU` and `DELIVERY_AREAS` in `src/catalog.ts`. Then run `pnpm menu:gen` to regenerate `skill/references/menu.md`, deploy the Worker, and republish the skill in Chord. `pnpm test` fails if the skill's menu no longer matches the catalog.
+
+## What I'd build next
+
+- **Payment webhooks.** Payments are checked when the customer says they've paid, and when Paystack redirects them to `/payment/return`. A customer who pays, closes the tab and never comes back to the chat leaves the order unpaid in our records. A Paystack webhook would fix the records, but the teammate still couldn't tell the customer, because Chord has no way to send a message the customer didn't prompt. If Chord added that, the webhook would come first, so customers get "payment received" without asking.
+- **Stock.** Nothing stops an order for something that has sold out, so a customer could pay for a drink that isn't there and wait on a manual refund. For a small seller like this one, the owner would message the teammate "we're out of tigernut today" and it would stop offering tigernut until she says it's back. For a bigger business, the same check would read their inventory system. Either way, `quote_order` would return an `OUT_OF_STOCK` error before a payment link exists, and the agent would suggest something else.
+- **Delivery by address.** Areas are a fixed list, with the other names people use for them. Looking up the customer's address or WhatsApp location pin and pricing delivery by distance would cover the whole city.
 
 ## How AI tools were used
 
