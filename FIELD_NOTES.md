@@ -63,14 +63,13 @@ When the teammate hands a chat to a human, the customer sees nothing and the own
 | 2026-10-27 17:08 | Simulator, the business owner | She asked for delivery to an area we didn't cover yet, then wrote "I still want delivery". The teammate handed off with the reason "Customer Huraira wants drinks delivered to Softlife Apartments, Jahi, which is outside the listed delivery areas…". The simulator showed her no reply, so she wrote "Hello" 17 seconds later. No escalation email arrived at the inbox set the day before, so nobody knew the chat was waiting. |
 | 2026-10-27 19:58 | Simulator, our repeat test | To confirm, we asked the teammate "can I speak to the owner please? I want to ask about a birthday party order for Saturday". It handed off within 2 seconds with a correct reason. The simulator again showed only "No reply yet", and Chord again stored only the system acknowledgement. Again, no escalation email arrived. |
 
-![Chord's view of the owner's chat: the AI is paused and the handoff message only appears here, not in the simulator](docs/field-notes/handover-owner-test.png)
+The owner's phone: after "I still want delivery", nothing came back, so she wrote "Hello".
 
-The repeat test from both sides. On the left, the customer's screen after asking for the owner shows only "No reply yet". On the right, Chord shows the same chat paused, with the acknowledgement the customer never received.
+![The owner's phone: no reply after the handoff, only "No reply yet"](docs/field-notes/handover-owner-phone.jpg)
 
-<p>
-  <img src="docs/field-notes/handover-simulator-no-reply.png" alt="Simulator: after asking for the owner, the customer sees only 'No reply yet'" width="56%">
-  <img src="docs/field-notes/handover-chord-paused.png" alt="Chord: the same chat is paused and shows 'One moment — connecting you with a teammate.'" width="40%">
-</p>
+The same chat in Chord: the AI is paused, and the acknowledgement she never received shows only here.
+
+![Chord's view of the owner's chat: the AI is paused and the handoff message only appears here](docs/field-notes/handover-owner-test.png)
 
 ### How we found it
 
