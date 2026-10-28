@@ -7,8 +7,8 @@
 **What must be true before real customers use it:**
 
 1. **Your real menu.** Prices, sizes, delivery areas, delivery fees and opening hours are placeholders today. We need your confirmed list.
-2. **Live Paystack keys.** Your Paystack business must be verified for live payments. We then swap the test key for the live key. The server refuses anything but a test key today, so this is a deliberate code change.
+2. **Live Paystack keys.** Your Paystack business must be verified for live payments. Once it is, we switch the assistant from test payments to real ones.
 3. **A connected WhatsApp number.** A WhatsApp Business number has to be connected to Chord, usually through Meta's business verification. Instagram DMs need the same kind of connection.
-4. **A plan for failed payments.** If a card fails, the assistant asks the customer to retry with the same link or pay by bank transfer inside Paystack. If a payment is reversed or the amount looks wrong, it stops and hands the chat to you. We should also add a Paystack webhook, so an order is marked paid even when the customer pays and never comes back to the chat.
-5. **Someone who gets alerted.** Set your email in Chord's escalation settings so every handoff reaches you with the transcript. Decide who answers handoffs and how fast. Add an alert, by email or WhatsApp to you, for when the order server or Paystack is down. Today those errors only show in Cloudflare's logs.
+4. **A plan for failed payments.** If a card fails, the assistant asks the customer to retry with the same link or pay by bank transfer inside Paystack. If a payment is reversed or the amount looks wrong, it stops and hands the chat to you. We'll also make orders update by themselves when Paystack confirms a payment, so an order still counts as paid if the customer pays and never comes back to the chat.
+5. **Someone who gets alerted.** Set your email in Chord's escalation settings so every handoff reaches you with the transcript. Decide who answers handoffs and how fast. If the ordering system or Paystack stops working, nobody is told today. We'll set up a message to you, by email or WhatsApp, when that happens.
 6. **Customer data.** Orders store the customer's name, area and items. Agree how long to keep them, and who can see them.
