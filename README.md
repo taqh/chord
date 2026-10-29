@@ -32,7 +32,7 @@ Everything runs in Paystack **test mode**. The menu prices and all customer data
 
 The tools are split this way because Chord doesn't carry tool results into later messages. See section 1 of `FIELD_NOTES.md`.
 
-Every result is JSON with `ok`. Failures carry `error.code`, a `message` that tells the agent what to say, and `retryable` and `handoff_to_owner` flags. The codes are `EMPTY_ORDER`, `UNKNOWN_ITEM`, `INVALID_QUANTITY`, `UNKNOWN_DELIVERY_AREA`, `ORDER_NOT_FOUND`, `ORDER_ALREADY_PAID`, `PAYMENT_LINK_NOT_CREATED`, `PAYMENT_PROVIDER_UNAVAILABLE` (network error, timeout or 5xx), `PAYMENT_PROVIDER_EMPTY_RESPONSE`, `PAYMENT_PROVIDER_REJECTED`, `PAYMENT_AMOUNT_MISMATCH`, `PAYMENTS_MISCONFIGURED` and `INTERNAL_ERROR`. An unpaid order is not an error. `check_payment_status` returns `paid: false` with a `payment_status` of `not_paid_yet`, `in_progress`, `failed` or `reversed`.
+Failures return an `error.code`, a `message` that tells the agent what to say, and `retryable` and `handoff_to_owner` flags. An unpaid order isn't an error: `check_payment_status` returns `paid: false` with a reason.
 
 The server only accepts Paystack keys that start with `sk_test_`. Any other key returns `PAYMENTS_MISCONFIGURED`.
 
@@ -76,7 +76,7 @@ The server only accepts Paystack keys that start with `sk_test_`. Any other key 
    pnpm smoke
    ```
 
-   It checks auth, lists the tools, triggers the validation errors, quotes an order, creates it with a real Paystack test link, confirms that a repeat `create_order` returns the same order, and checks the payment. `pnpm smoke call <tool> '<json>'` calls any single tool. To test a paid order, open the printed link, choose **Success** on Paystack's test checkout, then run `pnpm smoke status JT-XXXXXX`.
+   It runs the full order flow against a real Paystack test link. To test a paid order, open the printed link, choose **Success** on Paystack's test checkout, then run `pnpm smoke status JT-XXXXXX`.
 
 Unit tests, the type check, and Ultracite (oxlint and oxfmt):
 
@@ -86,8 +86,6 @@ pnpm typecheck
 pnpm check   # lint and format check
 pnpm fix     # apply fixes and format
 ```
-
-Imports inside `src/` use the `@/` alias (`@/catalog` resolves to `src/catalog.ts`), set once in `tsconfig.json` `paths`. Vite reads it through `resolve.tsconfigPaths`, and `tsx` reads it for `scripts/` and `test/`.
 
 ## Deploy
 
@@ -121,9 +119,8 @@ The Worker is published at `https://chord.taqib.dev`, a custom domain declared i
 
 ## Connect to Chord
 
-1. **Register the MCP server.** In Chord, go to Admin → Channels & Tools → Tools → Custom tools (MCP) → Add server. Set the URL to `https://chord.taqib.dev/mcp`, the auth type to `bearer`, the auth token to your `MCP_BEARER_TOKEN`, and the transport to `streamable_http`. With the API, use `POST /v1/workspaces/{workspace_id}/mcp-servers`.
-2. **Check it.** `POST .../mcp-servers/{id}/health` should return `"status": "ok"`. `POST .../mcp-servers/{id}/tools` should list the four tools.
-3. **Create the teammate.** Go to Team → Create a teammate and upload a ZIP of the **contents** of `skill/`:
+1. **Register the MCP server.** In Chord, go to Admin → Channels & Tools → Tools → Custom tools (MCP) → Add server. Set the URL to `https://chord.taqib.dev/mcp`, the auth type to `bearer`, the auth token to your `MCP_BEARER_TOKEN`, and the transport to `streamable_http`.
+2. **Create the teammate.** Go to Team → Create a teammate and upload a ZIP of the **contents** of `skill/`:
 
    ```sh
    cd skill && zip -r ../juicetrybe-skill.zip SKILL.md references
@@ -131,9 +128,8 @@ The Worker is published at `https://chord.taqib.dev`, a custom domain declared i
 
    Zipping the `skill` folder itself prefixes every path with `skill/`, and then `references/menu.md` no longer matches. Set autonomy to **Act independently** so the teammate replies to customers itself.
 
-4. **Limit the teammate's tools.** Restrict the teammate to this server with `PUT /v1/teammates/{id}` and the body `{"set_mcp_server_ids": ["mcp-…"]}`.
-5. **Set the escalation email.** On the teammate's page, open the panel menu at the top of the chat (the sidebar icon with a small arrow) and choose **Settings**. On the **Tools and connections** tab, expand **Behavior**, enter the inbox under **Escalation** → "Notify this inbox on escalation", and click **Save**. The gear icon opens a different Settings window that doesn't have this field. With the API, use `PUT /v1/teammates/{id}/escalation-notifications` with `{"notify_to": "owner@example.com", "workspace_id": "ws-…"}`.
-6. **Test.** Open the WhatsApp Simulator chat link (chat.tsglabs.dev). Each browser gets its own conversation. Ask for "2 zobo 50cl and 1 small chops pack to Jabi", confirm, pay the link with Paystack's **Success** test option, then say you've paid. The in-app chat in Chord works too, but it keeps one shared history for you.
+3. **Set the escalation email.** Enter the owner's inbox under Behavior → Escalation in the teammate's Settings panel. It's hard to find, so see section 4 of `FIELD_NOTES.md` for where it is.
+4. **Test.** Open the WhatsApp Simulator chat link (chat.tsglabs.dev). Each browser gets its own conversation. Ask for "2 zobo 50cl and 1 small chops pack to Jabi", confirm, pay the link with Paystack's **Success** test option, then say you've paid. The in-app chat in Chord works too, but it keeps one shared history for you.
 
 ## Change the menu
 
@@ -141,12 +137,12 @@ Edit `MENU` and `DELIVERY_AREAS` in `src/catalog.ts`. Then run `pnpm menu:gen` t
 
 ## What I'd build next
 
-- **Payment webhooks.** Payments are checked when the customer says they've paid, and when Paystack redirects them to `/payment/return`. A customer who pays, closes the tab and never comes back to the chat leaves the order unpaid in our records. A Paystack webhook would fix the records, but the teammate still couldn't tell the customer, because Chord has no way to send a message the customer didn't prompt. If Chord added that, the webhook would come first, so customers get "payment received" without asking.
-- **Stock.** Nothing stops an order for something that has sold out, so a customer could pay for a drink that isn't there and wait on a manual refund. For a small seller like this one, the owner would message the teammate "we're out of tigernut today" and it would stop offering tigernut until she says it's back. For a bigger business, the same check would read their inventory system. Either way, `quote_order` would return an `OUT_OF_STOCK` error before a payment link exists, and the agent would suggest something else.
+- **Payment webhooks.** Payments are only checked when the customer says they've paid or Paystack redirects them back, so a customer who pays and closes the tab stays unpaid in our records. A Paystack webhook would fix that, and once Chord can send messages the customer didn't prompt, the teammate could say "payment received" without being asked.
+- **Stock.** Nothing stops an order for something that has sold out, so a customer could pay for a drink that isn't there. The owner could tell the teammate "we're out of tigernut today" (or a bigger business could connect its inventory system), and `quote_order` would refuse sold-out items before a payment link exists.
 - **Delivery by address.** Areas are a fixed list, with the other names people use for them. Looking up the customer's address or WhatsApp location pin and pricing delivery by distance would cover the whole city.
 
 ## How AI tools were used
 
-This project was built in pair-programming sessions with Claude Code (Opus 5.5). Claude read the Chord docs (build a teammate, skill files, MCP connections, escalation) and Paystack's official OpenAPI spec before writing code. It scaffolded the project with `cf init` and wrote the Worker, tools, tests and skill. It deployed with the `cf` CLI, and registered the MCP server and created the teammate in the Chord app through the in-app browser. Then it tested the full flow in Chord's test chat with Paystack test payments.
+This project was built in pair-programming sessions with Claude Code (Opus 5.5). Claude read the Chord and Paystack docs, wrote the Worker, tools, tests and skill, deployed it to Cloudflare Workers with the `cf` CLI, and set up the teammate in Chord.
 
-I chose the business, the stack and the scope. Claude found several bugs by running the real flow, and I verified the fixes by running chats in several simulator tabs. I caught one myself: the agent apologised for a "wrong" order reference and created a duplicate order. The Chord problems are listed in `FIELD_NOTES.md`.
+I chose the business, the stack and the scope, and gave Claude the business details the skill is built on: the Instagram page, and the local names people use for delivery areas, like Central Area for Central Business District. Claude found several bugs by running the real flow, and I verified the fixes by running chats in several simulator tabs. I caught one myself: the agent apologised for a "wrong" order reference and created a duplicate order. The Chord problems are listed in `FIELD_NOTES.md`.
