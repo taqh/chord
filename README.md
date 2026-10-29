@@ -4,12 +4,7 @@ A small Chord teammate that takes drink and snack orders over chat for a seller 
 
 Everything runs in Paystack **test mode**. The menu prices and all customer data are made up.
 
-```
-customer ──chat──▶ Chord teammate ──MCP (Streamable HTTP, bearer)──▶ chord.taqib.dev/mcp
-                   (skill/)                                          (Hono on Cloudflare Workers)
-                                                                       ├─ D1: orders
-                                                                       └─ Paystack test API
-```
+![Architecture: the customer chats with the Chord teammate, which calls four tools on the MCP server at chord.taqib.dev/mcp. The server stores orders in Cloudflare D1 and creates and verifies Paystack test payments, and the teammate hands off to the owner by email when it can't help. Below, an order flows through quote_order, create_order, Paystack checkout and check_payment_status, with create_payment_link resending the link on request.](docs/architecture.png)
 
 ## Repository layout
 
@@ -30,10 +25,10 @@ customer ──chat──▶ Chord teammate ──MCP (Streamable HTTP, bearer)�
 
 | Tool | What it does |
 | --- | --- |
-| `quote_order(items, delivery_area)` | Checks each `item_id` against the menu and the area against the delivery list, and returns the line items, delivery fee and total in naira. Saves nothing and creates no reference. |
-| `create_order(items, customer_name, delivery_area, customer_email?)` | Used once the customer confirms. Saves the order, calls Paystack `POST /transaction/initialize` in test mode, and returns the reference (such as `JT-7K3QF2`) together with the checkout URL. Calling it again with the same name, area and items within 30 minutes returns the same order and link, or says the order is already paid. |
-| `create_payment_link(order_reference, customer_email?)` | Resends the checkout URL for an existing order. Always returns the same link for an unpaid order. |
-| `check_payment_status(order_reference)` | Calls Paystack `GET /transaction/verify/{reference}`. Marks the order paid only on `success` with a matching amount and currency. |
+| `quote_order` | Checks each `item_id` against the menu and the area against the delivery list, and returns the line items, delivery fee and total in naira. Saves nothing and creates no reference. |
+| `create_order` | Used once the customer confirms. Saves the order, calls Paystack `POST /transaction/initialize` in test mode, and returns the reference (such as `JT-7K3QF2`) together with the checkout URL. Calling it again with the same name, area and items within 30 minutes returns the same order and link, or says the order is already paid. |
+| `create_payment_link` | Resends the checkout URL for an existing order. Always returns the same link for an unpaid order. |
+| `check_payment_status` | Calls Paystack `GET /transaction/verify/{reference}`. Marks the order paid only on `success` with a matching amount and currency. |
 
 The tools are split this way because Chord doesn't carry tool results into later messages. See section 1 of `FIELD_NOTES.md`.
 
@@ -152,6 +147,6 @@ Edit `MENU` and `DELIVERY_AREAS` in `src/catalog.ts`. Then run `pnpm menu:gen` t
 
 ## How AI tools were used
 
-This project was built in pair-programming sessions with Claude Code (Claude Opus). Claude read the Chord docs (build a teammate, skill files, MCP connections, escalation) and Paystack's official OpenAPI spec before writing code. It scaffolded the project with `cf init` and wrote the Worker, tools, tests and skill. It deployed with the `cf` CLI, and registered the MCP server and created the teammate in the Chord app through the in-app browser. Then it tested the full flow in Chord's test chat with Paystack test payments.
+This project was built in pair-programming sessions with Claude Code (Opus 5.5). Claude read the Chord docs (build a teammate, skill files, MCP connections, escalation) and Paystack's official OpenAPI spec before writing code. It scaffolded the project with `cf init` and wrote the Worker, tools, tests and skill. It deployed with the `cf` CLI, and registered the MCP server and created the teammate in the Chord app through the in-app browser. Then it tested the full flow in Chord's test chat with Paystack test payments.
 
-I chose the business, the stack and the scope. Claude found several bugs by running the real flow, not by reading the code: a wrong argument name, an inaccurate unpaid message, and duplicate orders caused by Chord dropping tool results between messages. The Chord problems are in `FIELD_NOTES.md`. Claude also drafted this documentation.
+I chose the business, the stack and the scope. Claude found several bugs by running the real flow, and I verified the fixes by running chats in several simulator tabs. I caught one myself: the agent apologised for a "wrong" order reference and created a duplicate order. The Chord problems are listed in `FIELD_NOTES.md`.
